@@ -1,24 +1,30 @@
 # FILE: backend/app/services/llm_service.py
-import requests
+import os
 import json
+import google.generativeai as genai
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "mistral"
+# Setup Gemini using environment variable set in Render
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 def clean_output(text: str):
+    """
+    Cleans LLM output to ensure it is valid JSON or plain text.
+    """
     if not text:
         return ""
     return text.replace("```json", "").replace("```", "").replace("markdown", "").strip()
 
 def call_llm(prompt: str, temperature=0.2):
+    """
+    Calls the Gemini API instead of the local Ollama service.
+    """
     try:
-        response = requests.post(
-            OLLAMA_URL,
-            json={"model": MODEL_NAME, "prompt": prompt, "stream": False, "options": {"temperature": temperature}},
-            timeout=600
-        )
-        return clean_output(response.json().get("response", "").strip())
-    except requests.exceptions.RequestException as e:
+        # Gemini uses 'generation_config' for temperature settings
+        generation_config = genai.types.GenerationConfig(temperature=temperature)
+        response = model.generate_content(prompt, generation_config=generation_config)
+        return clean_output(response.text)
+    except Exception as e:
         return f"ERROR: {str(e)}"
 
 def analyze_clause(clause: str, doc_summary: str = "Unknown context"):
@@ -53,20 +59,14 @@ OUTPUT FORMAT:
     response_text = call_llm(prompt, temperature=0.2)
     
     if response_text.startswith("ERROR:"):
-        return {"internal_reasoning": "Failed to reach LLM.", "risk_type": "unknown", "severity": "medium", "confidence": 0.0, "explanation": "LLM service unavailable", "recommendation": "Retry."}
+        return {"internal_reasoning": "Failed to reach Gemini API.", "risk_type": "unknown", "severity": "medium", "confidence": 0.0, "explanation": "Cloud LLM service unavailable", "recommendation": "Retry."}
 
     try:
         parsed = json.loads(response_text)
-        risk_type_raw = str(parsed.get("risk_type", "unknown")).lower()
-        risk_type_final = next((r.strip() for r in risk_type_raw.replace("\\", "|").replace("/", "|").split("|") if r.strip() in ["financial", "restriction", "unfair", "none"]), "unknown")
-        
-        severity = str(parsed.get("severity", "unknown")).lower()
-        if severity not in ["low", "medium", "high"]: severity = "unknown"
-
         return {
             "internal_reasoning": str(parsed.get("internal_reasoning", "No internal reasoning provided.")).strip(),
-            "risk_type": risk_type_final,
-            "severity": severity,
+            "risk_type": str(parsed.get("risk_type", "unknown")).lower(),
+            "severity": str(parsed.get("severity", "unknown")).lower(),
             "confidence": float(parsed.get("confidence", 0.5)),
             "explanation": str(parsed.get("explanation", "No explanation provided.")).strip(),
             "recommendation": str(parsed.get("recommendation", "No recommendation provided.")).strip()
@@ -79,7 +79,7 @@ def summarize_document(text: str):
         "You are a legal document summarization engine. Return ONLY valid JSON with this exact structure:\n"
         "{\n  \"short_summary\": \"\",\n  \"important_points\": [\"\", \"\"],\n  \"possible_risks\": [\n    {\"risk_type\": \"financial\", \"description\": \"\"}\n  ]\n}\n\n"
         "Rules:\n- Do NOT output markdown.\n- Use plain text in strings.\n- Keep fields concise.\n\n"
-        f"Document:\n{text[:3000]}"
+        f"Document:\n{text[:5000]}"
     )
     result = call_llm(prompt, temperature=0.3)
     try:
@@ -87,7 +87,7 @@ def summarize_document(text: str):
         return {
             "short_summary": parsed.get("short_summary", "").strip(),
             "important_points": parsed.get("important_points", []) if isinstance(parsed.get("important_points"), list) else [],
-            "possible_risks": [{"risk_type": str(r.get("risk_type", "other")).lower(), "description": str(r.get("description", "")).strip()} for r in parsed.get("possible_risks", []) if isinstance(r, dict)]
+            "possible_risks": parsed.get("possible_risks", [])
         }
     except Exception:
         return {"short_summary": "Unable to generate summary at this time.", "important_points": [], "possible_risks": []}
@@ -97,29 +97,23 @@ def detect_document_type(text: str):
     result = call_llm(prompt, temperature=0)
     return result.strip().lower() if result and not result.startswith("ERROR:") else "unknown"
 
-# --- NEW FUNCTION FOR CHATBOT INTEGRATION ---
 def chat_with_document(question: str, document_context: str):
     prompt = f"""
 You are an expert legal assistant helping a user understand their document.
 Answer the user's question based STRICTLY on the provided document context.
 
 RULES:
-1. Do not hallucinate external laws or facts not present in the text unless specifically asked for general advice.
+1. Do not hallucinate external laws or facts not present in the text.
 2. Be concise, direct, and practical.
 3. If the answer cannot be found in the context, reply exactly with: "I cannot find this information in the document."
 
 DOCUMENT CONTEXT:
-{document_context[:4000]}
+{document_context[:8000]}
 
 USER QUESTION:
 "{question}"
 
 ANSWER:
 """
-    # Using a slightly higher temperature for conversational flow, but kept low for factual accuracy
     response = call_llm(prompt, temperature=0.3)
-    
-    if response.startswith("ERROR:"):
-        return "I am currently unable to process your question. Please try again later."
-        
-    return response
+    return response if not response.startswith("ERROR:") else "I am currently unable to process your question."
