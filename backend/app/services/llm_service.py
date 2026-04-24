@@ -1,11 +1,17 @@
 # FILE: backend/app/services/llm_service.py
 import os
 import json
-import google.generativeai as genai
+from google import genai
 
-# Setup Gemini using environment variable set in Render
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash')
+# Initialize the new Google GenAI client
+# This client defaults to stable API versions and avoids the v1beta 404 error
+client = genai.Client(
+    api_key=os.getenv("GOOGLE_API_KEY"),
+    http_options={'api_version': 'v1'}
+)
+
+# gemini-2.5-flash is now the standard for fast document analysis
+MODEL_ID = "gemini-2.5-flash"
 
 def clean_output(text: str):
     """
@@ -17,12 +23,15 @@ def clean_output(text: str):
 
 def call_llm(prompt: str, temperature=0.2):
     """
-    Calls the Gemini API instead of the local Ollama service.
+    Calls the new Gemini SDK instead of the deprecated generativeai library.
     """
     try:
-        # Gemini uses 'generation_config' for temperature settings
-        generation_config = genai.types.GenerationConfig(temperature=temperature)
-        response = model.generate_content(prompt, generation_config=generation_config)
+        # Using the new SDK's generate method
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt,
+            config={'temperature': temperature}
+        )
         return clean_output(response.text)
     except Exception as e:
         return f"ERROR: {str(e)}"
@@ -59,12 +68,19 @@ OUTPUT FORMAT:
     response_text = call_llm(prompt, temperature=0.2)
     
     if response_text.startswith("ERROR:"):
-        return {"internal_reasoning": "Failed to reach Gemini API.", "risk_type": "unknown", "severity": "medium", "confidence": 0.0, "explanation": "Cloud LLM service unavailable", "recommendation": "Retry."}
+        return {
+            "internal_reasoning": "Failed to reach Gemini API.", 
+            "risk_type": "unknown", 
+            "severity": "medium", 
+            "confidence": 0.0, 
+            "explanation": f"Cloud LLM Error: {response_text}", 
+            "recommendation": "Check API key and model availability."
+        }
 
     try:
         parsed = json.loads(response_text)
         return {
-            "internal_reasoning": str(parsed.get("internal_reasoning", "No internal reasoning provided.")).strip(),
+            "internal_reasoning": str(parsed.get("internal_reasoning", "No reasoning provided.")).strip(),
             "risk_type": str(parsed.get("risk_type", "unknown")).lower(),
             "severity": str(parsed.get("severity", "unknown")).lower(),
             "confidence": float(parsed.get("confidence", 0.5)),
