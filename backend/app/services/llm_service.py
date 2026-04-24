@@ -1,284 +1,125 @@
+# FILE: backend/app/services/llm_service.py
 import requests
 import json
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL_NAME = "mistral"
 
-
-# -------------------------------
-# 🔹 CLEAN OUTPUT (CRITICAL)
-# -------------------------------
 def clean_output(text: str):
     if not text:
         return ""
+    return text.replace("```json", "").replace("```", "").replace("markdown", "").strip()
 
-    return (
-        text.replace("```", "")
-        .replace("markdown", "")
-        .strip()
-    )
-
-
-# -------------------------------
-# 🔹 COMMON LLM CALL FUNCTION
-# -------------------------------
 def call_llm(prompt: str, temperature=0.2):
     try:
         response = requests.post(
             OLLAMA_URL,
-            json={
-                "model": MODEL_NAME,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": temperature
-                }
-            },
+            json={"model": MODEL_NAME, "prompt": prompt, "stream": False, "options": {"temperature": temperature}},
             timeout=600
         )
-
-        result = response.json()
-        output = result.get("response", "").strip()
-
-        return clean_output(output)
-
+        return clean_output(response.json().get("response", "").strip())
     except requests.exceptions.RequestException as e:
         return f"ERROR: {str(e)}"
 
-
-# -------------------------------
-# 🔹 CLAUSE ANALYSIS
-# -------------------------------
-def analyze_clause(clause: str):
+def analyze_clause(clause: str, doc_summary: str = "Unknown context"):
     prompt = f"""
-You are a legal risk analysis engine specialized in rental agreements.
+You are a top-tier legal risk analysis engine evaluating a specific clause within a broader document.
 
-STRICT RULES:
+DOCUMENT SUMMARY (Context):
+{doc_summary}
 
-- Output ONLY valid JSON
-- No markdown, no explanations outside JSON
-- Do not hallucinate laws
-- Ignore irrelevant clauses
+CLAUSE TO ANALYZE:
+\"\"\"{clause}\"\"\"
 
-RISK TYPES:
-financial, restriction, unfair, none
+INSTRUCTIONS:
+1. Briefly analyze how this specific clause interacts with the overall document context.
+2. Identify if it presents a financial risk, restriction, or unfair term to the user.
+3. Output your final assessment in STRICT valid JSON format.
+4. No markdown, no conversational text outside the JSON.
 
-SEVERITY:
-low, medium, high
+RISK TYPES: financial, restriction, unfair, none
+SEVERITY: low, medium, high
 
-OUTPUT:
-
+OUTPUT FORMAT:
 {{
+  "internal_reasoning": "Step-by-step thought process regarding the context (max 2 sentences)",
   "risk_type": "",
   "severity": "",
   "confidence": 0.0,
-  "explanation": "",
-  "recommendation": ""
+  "explanation": "Clear, practical explanation of the risk.",
+  "recommendation": "Actionable next step."
 }}
-
-Guidance:
-- If a clause touches multiple risk areas, choose the dominant risk_type.
-- Set confidence as a decimal between 0.0 and 1.0.
-- Keep explanation concise and include a practical recommendation.
-
-CLAUSE:
-\"\"\"{clause}\"\"\"
-
-If format breaks, regenerate correctly.
 """
-
     response_text = call_llm(prompt, temperature=0.2)
-
-    # Handle error responses from LLM
+    
     if response_text.startswith("ERROR:"):
-        return {
-            "risk_type": "unknown",
-            "severity": "medium",
-            "confidence": 0.0,
-            "explanation": "Unable to analyze clause (LLM service unavailable)",
-            "recommendation": "Please retry or verify the document content."
-        }
+        return {"internal_reasoning": "Failed to reach LLM.", "risk_type": "unknown", "severity": "medium", "confidence": 0.0, "explanation": "LLM service unavailable", "recommendation": "Retry."}
 
     try:
         parsed = json.loads(response_text)
-
-        if not isinstance(parsed, dict):
-            raise ValueError("Invalid JSON format")
-
         risk_type_raw = str(parsed.get("risk_type", "unknown")).lower()
-        risk_type_candidates = [r.strip() for r in risk_type_raw.replace("\\", "|").replace("/", "|").split("|") if r.strip()]
-        risk_type_final = "unknown"
-        for candidate in risk_type_candidates:
-            if candidate in ["financial", "restriction", "unfair", "none"]:
-                risk_type_final = candidate
-                break
-        if risk_type_final == "unknown" and risk_type_raw in ["financial", "restriction", "unfair", "none", "unknown"]:
-            risk_type_final = risk_type_raw
-
+        risk_type_final = next((r.strip() for r in risk_type_raw.replace("\\", "|").replace("/", "|").split("|") if r.strip() in ["financial", "restriction", "unfair", "none"]), "unknown")
+        
         severity = str(parsed.get("severity", "unknown")).lower()
-        if severity not in ["low", "medium", "high", "unknown"]:
-            severity = "unknown"
-
-        confidence = parsed.get("confidence", None)
-        try:
-            confidence = float(confidence)
-            confidence = max(0.0, min(1.0, confidence))
-        except (TypeError, ValueError):
-            # fallback confidence for non-none risk categories
-            if risk_type_final in ["financial", "restriction", "unfair"]:
-                confidence = 0.7
-            elif severity in ["high"]:
-                confidence = 0.75
-            elif severity in ["medium"]:
-                confidence = 0.6
-            else:
-                confidence = 0.3
-
-        explanation = str(parsed.get("explanation", "No explanation provided.")).strip()
-        if not explanation:
-            explanation = "No explanation provided."
-
-        recommendation = str(parsed.get("recommendation", "")).strip()
-        if not recommendation:
-            if risk_type_final == "financial":
-                recommendation = "Review payment terms and discuss potential adjustments with the landlord."
-            elif risk_type_final == "restriction":
-                recommendation = "Consider negotiating the lock-in period or termination clauses."
-            elif risk_type_final == "unfair":
-                recommendation = "Seek legal advice to challenge potentially unfair terms."
-            else:
-                recommendation = "No recommendation provided."
+        if severity not in ["low", "medium", "high"]: severity = "unknown"
 
         return {
+            "internal_reasoning": str(parsed.get("internal_reasoning", "No internal reasoning provided.")).strip(),
             "risk_type": risk_type_final,
             "severity": severity,
-            "confidence": confidence,
-            "explanation": explanation,
-            "recommendation": recommendation
+            "confidence": float(parsed.get("confidence", 0.5)),
+            "explanation": str(parsed.get("explanation", "No explanation provided.")).strip(),
+            "recommendation": str(parsed.get("recommendation", "No recommendation provided.")).strip()
         }
-
     except Exception:
-        # Fallback for unparseable responses
-        return {
-            "risk_type": "unknown",
-            "severity": "low",
-            "confidence": 0.0,
-            "explanation": "Could not parse analysis; please verify model output format.",
-            "recommendation": "Use a stronger model or debug clause prompts."
-        }
+        return {"internal_reasoning": "JSON Parsing Failed.", "risk_type": "unknown", "severity": "low", "confidence": 0.0, "explanation": "Could not parse analysis.", "recommendation": "Retry."}
 
-
-# -------------------------------
-# 🔹 DOCUMENT SUMMARIZATION
-# -------------------------------
 def summarize_document(text: str):
     prompt = (
         "You are a legal document summarization engine. Return ONLY valid JSON with this exact structure:\n"
-        "{\n"
-        "  \"short_summary\": \"\",\n"
-        "  \"important_points\": [\"\", \"\"],\n"
-        "  \"possible_risks\": [\n"
-        "    {\"risk_type\": \"financial\", \"description\": \"\"}\n"
-        "  ]\n"
-        "}\n"
-        "\n"
-        "Rules:\n"
-        "- Do NOT output markdown.\n"
-        "- Use plain text in strings.\n"
-        "- Do NOT hallucinate laws.\n"
-        "- Keep fields concise and relevant.\n"
-        "\n"
-        "Document:\n"
-        f"{text[:3000]}"
+        "{\n  \"short_summary\": \"\",\n  \"important_points\": [\"\", \"\"],\n  \"possible_risks\": [\n    {\"risk_type\": \"financial\", \"description\": \"\"}\n  ]\n}\n\n"
+        "Rules:\n- Do NOT output markdown.\n- Use plain text in strings.\n- Keep fields concise.\n\n"
+        f"Document:\n{text[:3000]}"
     )
-
     result = call_llm(prompt, temperature=0.3)
-
-    if result.startswith("ERROR:"):
-        return {
-            "short_summary": "Document summary unavailable.",
-            "important_points": [],
-            "possible_risks": []
-        }
-
     try:
         parsed = json.loads(result)
-
-        if not isinstance(parsed, dict):
-            raise ValueError("Invalid format")
-
-        short_summary = parsed.get("short_summary", "").strip()
-        important_points = parsed.get("important_points", [])
-        possible_risks = parsed.get("possible_risks", [])
-
-        if not isinstance(important_points, list):
-            important_points = []
-        if not isinstance(possible_risks, list):
-            possible_risks = []
-
-        # Normalize risk_type entries
-        allowed_risks = ["financial", "restriction", "unfair", "other"]
-        normalized_risks = []
-
-        for risk in possible_risks:
-            if not isinstance(risk, dict):
-                continue
-            rt = str(risk.get("risk_type", "other")).lower()
-            if "|" in rt:
-                rt = next((part.strip() for part in rt.split("|") if part.strip() in allowed_risks), "other")
-            if rt not in allowed_risks:
-                rt = "other"
-            desc = str(risk.get("description", "")).strip()
-            normalized_risks.append({"risk_type": rt, "description": desc})
-
-        possible_risks = normalized_risks
-
         return {
-            "short_summary": short_summary,
-            "important_points": important_points,
-            "possible_risks": possible_risks
+            "short_summary": parsed.get("short_summary", "").strip(),
+            "important_points": parsed.get("important_points", []) if isinstance(parsed.get("important_points"), list) else [],
+            "possible_risks": [{"risk_type": str(r.get("risk_type", "other")).lower(), "description": str(r.get("description", "")).strip()} for r in parsed.get("possible_risks", []) if isinstance(r, dict)]
         }
-
     except Exception:
-        # Fallback to minimal structure
-        return {
-            "short_summary": result.strip() or "Unable to generate summary at this time.",
-            "important_points": [],
-            "possible_risks": []
-        }
+        return {"short_summary": "Unable to generate summary at this time.", "important_points": [], "possible_risks": []}
 
-
-# -------------------------------
-# 🔹 DOCUMENT TYPE DETECTION
-# -------------------------------
 def detect_document_type(text: str):
-    prompt = f"""
-You are a document classification engine.
+    prompt = f"You are a document classification engine.\nChoose ONLY one: rental agreement, legal notice, employment contract, loan agreement, service agreement, other\nRULES: Output only label. No explanation.\nDOCUMENT:\n\"\"\"{text[:2000]}\"\"\""
+    result = call_llm(prompt, temperature=0)
+    return result.strip().lower() if result and not result.startswith("ERROR:") else "unknown"
 
-Choose ONLY one:
-rental agreement
-legal notice
-employment contract
-loan agreement
-service agreement
-other
+# --- NEW FUNCTION FOR CHATBOT INTEGRATION ---
+def chat_with_document(question: str, document_context: str):
+    prompt = f"""
+You are an expert legal assistant helping a user understand their document.
+Answer the user's question based STRICTLY on the provided document context.
 
 RULES:
-- Output only label
-- No explanation
+1. Do not hallucinate external laws or facts not present in the text unless specifically asked for general advice.
+2. Be concise, direct, and practical.
+3. If the answer cannot be found in the context, reply exactly with: "I cannot find this information in the document."
 
-DOCUMENT:
-\"\"\"{text[:2000]}\"\"\"
+DOCUMENT CONTEXT:
+{document_context[:4000]}
 
-If unsure return "other".
+USER QUESTION:
+"{question}"
+
+ANSWER:
 """
-
-    result = call_llm(prompt, temperature=0)
+    # Using a slightly higher temperature for conversational flow, but kept low for factual accuracy
+    response = call_llm(prompt, temperature=0.3)
     
-    # Handle error responses
-    if result.startswith("ERROR:"):
-        return "unknown"
-    
-    clean_result = result.strip().lower()
-    return clean_result if clean_result else "unknown"
-
+    if response.startswith("ERROR:"):
+        return "I am currently unable to process your question. Please try again later."
+        
+    return response

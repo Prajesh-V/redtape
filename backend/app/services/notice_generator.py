@@ -1,161 +1,101 @@
-"""
-🏛️ PRACTICAL LEGAL NOTICE GENERATOR
-=====================================
-
-Generates usable, practical legal notices using:
-- Simple, clear language (no legal jargon)
-- No hallucinated laws or citations
-- Location-agnostic approach
-- Focus on clear communication and demands
-"""
-
+# FILE: backend/app/services/notice_generator.py
 import json
-from typing import Dict, List
+from typing import Dict, Optional
 from datetime import datetime
 from app.services.llm_service import call_llm
-
+from app.services.notice_templates import (
+    detect_notice_type,
+    NoticeType,
+    build_deposit_refund_notice,
+    build_rent_hike_notice,
+    build_eviction_notice,
+    build_breach_notice,
+    build_unpaid_salary_notice,
+    build_general_notice
+)
 
 class LegalNoticeGenerator:
-    """Practical legal notice generator for real-world use."""
+    """Practical legal notice generator connecting LLM extraction to deterministic templates."""
 
-    # Issue type detection keywords
-    ISSUE_TYPES = {
-        "deposit": ["deposit", "refund", "security", "return"],
-        "rent": ["rent", "increase", "hike", "raise", "payment"],
-        "eviction": ["evict", "remove", "vacate", "possession", "leave"],
-        "breach": ["breach", "violation", "fail", "default", "not doing"],
-        "harassment": ["harassment", "abuse", "threat", "violence", "trouble"],
-        "maintenance": ["maintenance", "repair", "damage", "negligence", "broken"],
-        "general": []
-    }
+    def _extract_facts(self, user_issue: str, context_data: Optional[str] = None) -> str:
+        """Uses LLM solely to extract and formalize facts, incorporating contract context if provided."""
+        context_instruction = ""
+        if context_data:
+            context_instruction = (
+                f"ADDITIONAL CONTRACT CONTEXT:\n{context_data}\n"
+                f"Reference relevant clauses or summary points from this context in your summary.\n"
+            )
 
-    # Subject line templates per issue type
-    SUBJECT_TEMPLATES = {
-        "deposit": "Request for Return of Security Deposit",
-        "rent": "Notice About Rent Issues",
-        "eviction": "Notice About Eviction",
-        "breach": "Notice About Agreement Violation",
-        "harassment": "Notice About Harassment",
-        "maintenance": "Notice About Property Maintenance",
-        "general": "Legal Notice"
-    }
-
-    def detect_issue_type(self, issue_description: str) -> str:
-        """Detect the type of legal issue from description."""
-        issue_lower = issue_description.lower()
-
-        for issue_type, keywords in self.ISSUE_TYPES.items():
-            if any(keyword in issue_lower for keyword in keywords):
-                return issue_type
-
-        return "general"
-
-    def generate_notice(self, issue_description: str) -> Dict:
-        """Generate a practical, usable legal notice."""
-        issue_type = self.detect_issue_type(issue_description)
-
-        # Get subject line
-        subject = self.SUBJECT_TEMPLATES.get(issue_type, "Legal Notice")
-
-        # Generate content using constrained LLM prompt
-        content = self._generate_content(issue_description, issue_type)
-
-        # Structure the notice
-        notice = {
-            "header": "LEGAL NOTICE",
-            "to": "[Recipient Name and Address]",
-            "from": "[Your Name and Address]",
-            "date": datetime.now().strftime("%d %B %Y"),
-            "subject": subject,
-            "body": content.get("body", ""),
-            "demand": content.get("demand", ""),
-            "signature": f"Date: {datetime.now().strftime('%d %B %Y')}\n\nPlace: __________\n\nSignature: ___________\n\nName: ___________"
-        }
-
-        return notice
-
-    def _generate_content(self, issue_description: str, issue_type: str) -> Dict:
-        """Generate notice content using highly constrained LLM prompt."""
-
-        # Ultra-constrained prompt that prevents hallucinations
         prompt = f"""
-You are a legal notice writer. Generate a simple, clear notice about: "{issue_description}"
+You are a legal assistant summarizing a user's complaint.
+Translate the user's informal explanation into a single, formal, factual paragraph that can be inserted into a legal notice.
 
-RULES - FOLLOW THESE STRICTLY:
-1. Use simple, everyday language - no legal jargon
-2. Do NOT mention any specific laws, acts, or sections
-3. Do NOT make up legal references or citations
-4. Keep it practical and understandable
-5. Focus on facts and clear requests
-6. Be polite but firm
+{context_instruction}
+USER ISSUE: "{user_issue}"
 
-OUTPUT FORMAT - Use this exact structure:
+RULES:
+1. Keep it under 4 sentences.
+2. Use formal, objective language (e.g., "The Respondent failed to...", "The Complainant paid...").
+3. Do NOT include greetings, demands, or legal jargon. Just the core facts.
+4. If contract context is provided, ensure the summary aligns with specific breaches or risky clauses mentioned.
+5. Return ONLY valid JSON.
 
-BODY:
-[Write 2-3 simple paragraphs explaining the situation clearly]
-
-DEMAND:
-[Write 1 clear paragraph stating what you want the other party to do and by when]
+OUTPUT FORMAT:
+{{
+    "formal_summary": "The objective summary of the issue."
+}}
 """
-
         try:
             response = call_llm(prompt)
+            parsed = json.loads(response)
+            summary = parsed.get("formal_summary", "").strip()
+            return summary if summary else user_issue
+        except Exception:
+            return user_issue
 
-            # Parse the response
-            body = ""
-            demand = ""
+    def generate_notice(self, issue_description: str, context_data: Optional[str] = None) -> Dict:
+        """Generate a structured legal notice dictionary."""
+        
+        # 1. Detect the legal category based on the issue and any context
+        combined_text = f"{issue_description} {context_data if context_data else ''}"
+        notice_type = detect_notice_type(combined_text)
+        
+        # 2. Extract Formal Facts via LLM, passing the bridge context
+        formal_facts = self._extract_facts(issue_description, context_data)
+        
+        # 3. Inject facts into the deterministic Python templates
+        if notice_type == NoticeType.DEPOSIT_REFUND:
+            notice_obj = build_deposit_refund_notice(formal_facts)
+        elif notice_type == NoticeType.RENT_HIKE:
+            notice_obj = build_rent_hike_notice(formal_facts)
+        elif notice_type == NoticeType.EVICTION:
+            notice_obj = build_eviction_notice(formal_facts)
+        elif notice_type == NoticeType.BREACH:
+            notice_obj = build_breach_notice(formal_facts)
+        elif notice_type == NoticeType.UNPAID_SALARY:
+            notice_obj = build_unpaid_salary_notice(formal_facts)
+        else:
+            notice_obj = build_general_notice(formal_facts)
+            
+        # 4. Map the object back to the JSON structure the frontend expects
+        return {
+            "issue_type": notice_type.value,
+            "header": notice_obj.format_header(),
+            "to": notice_obj.sections.get("to", "[Recipient Name and Address]"),
+            "from": notice_obj.sections.get("from", "[Your Name and Address]"),
+            "date": notice_obj.date,
+            "subject": notice_obj.sections.get("subject", "Legal Notice"),
+            "body": notice_obj.sections.get("body", ""),
+            "demand": notice_obj.sections.get("demand", ""),
+            "signature": notice_obj.format_closure()
+        }
 
-            if "BODY:" in response:
-                body_part = response.split("BODY:")[1]
-                if "DEMAND:" in body_part:
-                    body = body_part.split("DEMAND:")[0].strip()
-                    demand = body_part.split("DEMAND:")[1].strip()
-                else:
-                    body = body_part.strip()
-            else:
-                # Fallback if parsing fails
-                body = f"I am writing regarding: {issue_description}"
-                demand = "Please resolve this matter within 15 days."
 
-            return {
-                "body": body,
-                "demand": demand
-            }
-
-        except Exception as e:
-            # Fallback content if LLM fails
-            return {
-                "body": f"I am writing to inform you about the following issue: {issue_description}",
-                "demand": "Please resolve this matter within 15 days from receiving this notice."
-            }
-
-    def validate_notice(self, notice: Dict) -> bool:
-        """Validate that notice has all required sections."""
-        required_sections = ["header", "to", "from", "date", "subject", "body", "demand", "signature"]
-
-        for section in required_sections:
-            if section not in notice or not notice[section]:
-                return False
-
-        return True
-
-
-# ============================================================
-# Convenience methods used by API routes
-# ============================================================
-
-def generate_legal_notice(issue_description: str) -> Dict:
+def generate_legal_notice(issue_description: str, context_data: Optional[str] = None) -> Dict:
     """Generate a structured and validated legal notice."""
     generator = LegalNoticeGenerator()
-
-    notice = generator.generate_notice(issue_description)
-    notice["issue_type"] = generator.detect_issue_type(issue_description)
-
-    if not generator.validate_notice(notice):
-        raise ValueError("Generated notice is missing required fields")
-
+    notice = generator.generate_notice(issue_description, context_data)
     return notice
-
 
 def render_notice(notice: Dict) -> str:
     """Render structured notice as a formatted plain text string."""
@@ -163,10 +103,12 @@ def render_notice(notice: Dict) -> str:
         raise ValueError("Invalid notice data for rendering")
 
     parts = [
-        "LEGAL NOTICE",
+        notice.get('header', 'LEGAL NOTICE'),
         "",
-        f"TO: {notice.get('to', '[Recipient Name and Address]')}",
-        f"FROM: {notice.get('from', '[Your Name and Address]')}",
+        notice.get('to', ''),
+        "",
+        notice.get('from', ''),
+        "",
         f"Date: {notice.get('date', '')}",
         "",
         f"Subject: {notice.get('subject', '')}",
@@ -181,4 +123,3 @@ def render_notice(notice: Dict) -> str:
     ]
 
     return "\n".join(parts)
-

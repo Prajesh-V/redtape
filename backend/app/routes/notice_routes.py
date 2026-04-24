@@ -1,155 +1,99 @@
+# FILE: backend/app/routes/notice_routes.py
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 import io
-from typing import Optional
 
-from app.services.notice_generator import generate_legal_notice, render_notice
+from app.schemas import APIResponse, NoticeRequest, NoticeUpdateRequest, NoticeDownloadRequest
+from app.services.notice_generator import generate_legal_notice
 from app.services.pdf_generator import notice_to_pdf
 
 router = APIRouter(prefix="/notice", tags=["Notice Generator"])
 
+# ---------------------------------------------------
+# Generate Structured Notice
+# ---------------------------------------------------
 
-# ============================================================
-# 📋 REQUEST/RESPONSE SCHEMAS
-# ============================================================
-
-class NoticeRequest(BaseModel):
-    """User submits an issue description."""
-    issue: str
-
-
-class NoticeUpdateRequest(BaseModel):
-    """User edits one or more sections."""
-    notice_data: dict
-
-
-class NoticeDownloadRequest(BaseModel):
-    """User requests PDF download."""
-    notice_data: dict
-
-
-# ============================================================
-# 🧠 GENERATE STRUCTURED NOTICE
-# ============================================================
-
-@router.post("/generate")
+@router.post("/generate", response_model=APIResponse)
 def generate_notice_api(req: NoticeRequest):
     """
-    Generate a professionally structured legal notice.
-    
-    Returns:
-        {
-            "success": true,
-            "notice": {
-                "issue_type": "deposit|rent|eviction|breach|harassment|maintenance|general",
-                "header": "LEGAL NOTICE",
-                "to": "TO: [Recipient]",
-                "from": "FROM: [Sender]",
-                "date": "DD Month YYYY",
-                "subject": "Subject Line",
-                "body": "Numbered paragraphs...",
-                "demand": "Legal demand section...",
-                "signature": "Signature block..."
-            }
-        }
+    Generate a professionally structured legal notice based on user issue.
+    Accepts optional context_data from a previously scanned contract to 
+    ensure factual accuracy.
     """
     try:
         issue = req.issue.strip()
         
         if not issue or len(issue) < 10:
-            return {
-                "success": False,
-                "error": "Please provide a detailed description (minimum 10 characters)"
-            }
+            return APIResponse(
+                status="error",
+                error="Please provide a detailed description (minimum 10 characters)"
+            )
         
-        # Generate structured notice
-        notice = generate_legal_notice(issue)
+        # Generate the structured notice, passing the bridge context if it exists
+        notice = generate_legal_notice(
+            issue_description=issue,
+            context_data=req.context_data
+        )
         
-        print(f"✅ GENERATED NOTICE - Type: {notice.get('issue_type')}")
-        
-        return {
-            "success": True,
-            "notice": notice
-        }
+        return APIResponse(
+            status="success",
+            data={"notice": notice}
+        )
     
     except Exception as e:
-        print(f"❌ ERROR generating notice: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Failed to generate notice: {str(e)}"
-        }
+        return APIResponse(
+            status="error",
+            error=f"Failed to generate notice: {str(e)}"
+        )
 
+# ---------------------------------------------------
+# Update Notice Sections
+# ---------------------------------------------------
 
-# ============================================================
-# ✏️ UPDATE NOTICE SECTIONS
-# ============================================================
-
-@router.post("/update")
+@router.post("/update", response_model=APIResponse)
 def update_notice_api(req: NoticeUpdateRequest):
     """
-    Update specific sections of the notice.
-    
-    Allows users to edit:
-    - to, from, date, subject, body, demand, signature
+    Update specific sections of the notice after user edits.
     """
     try:
         notice_data = req.notice_data
         
-        # Validate structure
-        required = ["header", "to", "from", "date", "subject", "body", "demand", "signature"]
-        for field in required:
+        # Validate that the structure contains all required legal sections
+        required_fields = ["header", "to", "from", "date", "subject", "body", "demand", "signature"]
+        for field in required_fields:
             if field not in notice_data:
-                return {
-                    "success": False,
-                    "error": f"Missing field: {field}"
-                }
+                return APIResponse(status="error", error=f"Missing field: {field}")
         
-        # Validate content length
+        # Basic validation for content substance
         if len(notice_data.get("body", "")) < 50:
-            return {
-                "success": False,
-                "error": "Body section is too short"
-            }
+            return APIResponse(status="error", error="Notice body section is too short")
         
-        return {
-            "success": True,
-            "notice": notice_data,
-            "message": "Notice updated successfully"
-        }
+        return APIResponse(
+            status="success",
+            data={"notice": notice_data},
+            metadata={"message": "Notice updated successfully"}
+        )
     
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return APIResponse(status="error", error=str(e))
 
-
-# ============================================================
-# 📄 DOWNLOAD AS PROFESSIONAL PDF
-# ============================================================
+# ---------------------------------------------------
+# Download as Professional PDF
+# ---------------------------------------------------
 
 @router.post("/download")
 def download_notice_pdf(req: NoticeDownloadRequest):
     """
-    Download the notice as a professionally formatted PDF.
-    
-    Uses ReportLab to create legal document styled PDFs.
+    Render the current notice state into a professionally formatted PDF.
     """
     try:
         notice_data = req.notice_data
         
-        # Validate data
         if not notice_data or "body" not in notice_data:
-            return {
-                "success": False,
-                "error": "Invalid notice data"
-            }
+            return {"status": "error", "error": "Invalid notice data provided"}
         
-        # Generate PDF
+        # Generate PDF byte stream
         pdf_bytes = notice_to_pdf(notice_data)
-        
-        print("✅ PDF generated successfully")
         
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
@@ -160,8 +104,4 @@ def download_notice_pdf(req: NoticeDownloadRequest):
         )
     
     except Exception as e:
-        print(f"❌ PDF generation error: {str(e)}")
-        return {
-            "success": False,
-            "error": f"PDF generation failed: {str(e)}"
-        }
+        return {"status": "error", "error": f"PDF generation failed: {str(e)}"}
