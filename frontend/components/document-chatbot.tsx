@@ -48,7 +48,7 @@ export function DocumentChatbot({ documentContext, documentName = "your document
     setIsTyping(true)
 
     try {
-      const res = await fetch("https://redtape.onrender.com/chat/ask", {
+      const res = await fetch("http://127.0.0.1:8000/chat/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

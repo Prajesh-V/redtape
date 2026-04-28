@@ -75,7 +75,7 @@ export function AnalyzeUploader() {
     formData.append("file", file)
 
     try {
-      const res = await fetch("https://redtape.onrender.com/contract/scan", {
+      const res = await fetch("http://127.0.0.1:8000/contract/scan", {
         method: "POST",
         body: formData,
       })
@@ -109,7 +109,7 @@ export function AnalyzeUploader() {
     formData.append("file", file)
 
     try {
-      const res = await fetch("https://redtape.onrender.com/contract/highlight", {
+      const res = await fetch("http://127.0.0.1:8000/contract/highlight", {
         method: "POST",
         body: formData,
       })

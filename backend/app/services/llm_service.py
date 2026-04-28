@@ -1,39 +1,24 @@
 # FILE: backend/app/services/llm_service.py
-import os
+import requests
 import json
-from google import genai
 
-# Initialize the new Google GenAI client
-# This client defaults to stable API versions and avoids the v1beta 404 error
-client = genai.Client(
-    api_key=os.getenv("GOOGLE_API_KEY"),
-    http_options={'api_version': 'v1'}
-)
-
-# gemini-2.5-flash is now the standard for fast document analysis
-MODEL_ID = "gemini-2.5-flash"
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "mistral"
 
 def clean_output(text: str):
-    """
-    Cleans LLM output to ensure it is valid JSON or plain text.
-    """
     if not text:
         return ""
     return text.replace("```json", "").replace("```", "").replace("markdown", "").strip()
 
 def call_llm(prompt: str, temperature=0.2):
-    """
-    Calls the new Gemini SDK instead of the deprecated generativeai library.
-    """
     try:
-        # Using the new SDK's generate method
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=prompt,
-            config={'temperature': temperature}
+        response = requests.post(
+            OLLAMA_URL,
+            json={"model": MODEL_NAME, "prompt": prompt, "stream": False, "options": {"temperature": temperature}},
+            timeout=600
         )
-        return clean_output(response.text)
-    except Exception as e:
+        return clean_output(response.json().get("response", "").strip())
+    except requests.exceptions.RequestException as e:
         return f"ERROR: {str(e)}"
 
 def analyze_clause(clause: str, doc_summary: str = "Unknown context"):
@@ -68,19 +53,12 @@ OUTPUT FORMAT:
     response_text = call_llm(prompt, temperature=0.2)
     
     if response_text.startswith("ERROR:"):
-        return {
-            "internal_reasoning": "Failed to reach Gemini API.", 
-            "risk_type": "unknown", 
-            "severity": "medium", 
-            "confidence": 0.0, 
-            "explanation": f"Cloud LLM Error: {response_text}", 
-            "recommendation": "Check API key and model availability."
-        }
+        return {"internal_reasoning": "Failed to reach LLM.", "risk_type": "unknown", "severity": "medium", "confidence": 0.0, "explanation": "LLM service unavailable", "recommendation": "Retry."}
 
     try:
         parsed = json.loads(response_text)
         return {
-            "internal_reasoning": str(parsed.get("internal_reasoning", "No reasoning provided.")).strip(),
+            "internal_reasoning": str(parsed.get("internal_reasoning", "No internal reasoning provided.")).strip(),
             "risk_type": str(parsed.get("risk_type", "unknown")).lower(),
             "severity": str(parsed.get("severity", "unknown")).lower(),
             "confidence": float(parsed.get("confidence", 0.5)),
@@ -95,7 +73,7 @@ def summarize_document(text: str):
         "You are a legal document summarization engine. Return ONLY valid JSON with this exact structure:\n"
         "{\n  \"short_summary\": \"\",\n  \"important_points\": [\"\", \"\"],\n  \"possible_risks\": [\n    {\"risk_type\": \"financial\", \"description\": \"\"}\n  ]\n}\n\n"
         "Rules:\n- Do NOT output markdown.\n- Use plain text in strings.\n- Keep fields concise.\n\n"
-        f"Document:\n{text[:5000]}"
+        f"Document:\n{text[:3000]}"
     )
     result = call_llm(prompt, temperature=0.3)
     try:
@@ -103,7 +81,7 @@ def summarize_document(text: str):
         return {
             "short_summary": parsed.get("short_summary", "").strip(),
             "important_points": parsed.get("important_points", []) if isinstance(parsed.get("important_points"), list) else [],
-            "possible_risks": parsed.get("possible_risks", [])
+            "possible_risks": [{"risk_type": str(r.get("risk_type", "other")).lower(), "description": str(r.get("description", "")).strip()} for r in parsed.get("possible_risks", []) if isinstance(r, dict)]
         }
     except Exception:
         return {"short_summary": "Unable to generate summary at this time.", "important_points": [], "possible_risks": []}
@@ -124,7 +102,7 @@ RULES:
 3. If the answer cannot be found in the context, reply exactly with: "I cannot find this information in the document."
 
 DOCUMENT CONTEXT:
-{document_context[:8000]}
+{document_context[:4000]}
 
 USER QUESTION:
 "{question}"

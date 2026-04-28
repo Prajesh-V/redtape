@@ -60,7 +60,7 @@ export function NoticeGenerator() {
         payload.context_data = contextData
       }
 
-      const res = await fetch("https://redtape.onrender.com/notice/generate", {
+      const res = await fetch("http://127.0.0.1:8000/notice/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -117,7 +117,7 @@ export function NoticeGenerator() {
     setDownloadingPdf(true)
 
     try {
-      const res = await fetch("https://redtape.onrender.com/notice/download", {
+      const res = await fetch("http://127.0.0.1:8000/notice/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notice_data: notice }),
