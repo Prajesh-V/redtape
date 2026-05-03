@@ -1,53 +1,33 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
-const inter = Inter({ 
-  subsets: ["latin"],
-  variable: '--font-inter'
-});
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '700', '900'],
+  variable: '--font-inter',
+})
 
 export const metadata: Metadata = {
-  title: 'REDTAPE - AI-Powered Legal Assistant',
-  description: 'Cut through the red tape. Analyze and generate legal notices with AI. Fast, accurate, and professional.',
-  generator: 'v0.app',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+  title: 'REDTAPE — AI Legal Assistant',
+  description: 'Cut through the red tape. Analyze contracts and generate legal notices with AI. Fast, accurate, and professional.',
+  keywords: ['legal notice', 'contract analysis', 'AI legal', 'India legal', 'PDF analysis'],
+  openGraph: {
+    title: 'REDTAPE — AI Legal Assistant',
+    description: 'Cut through the red tape. AI-powered contract analysis and legal notice generation for Indian citizens.',
+    type: 'website',
   },
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+    <html lang="en">
+      {/* Swiss: no dark mode — strictly monochrome light */}
+      <body className={`${inter.variable} font-sans antialiased bg-white text-black swiss-noise relative`}>
+        {children}
         <Analytics />
       </body>
     </html>

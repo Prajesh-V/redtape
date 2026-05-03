@@ -2,71 +2,68 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Scale, Moon, Sun } from "lucide-react"
-import { useTheme } from "next-themes"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+
+const navLinks = [
+  { href: "/", label: "Home" },
+  { href: "/analyze", label: "Analyze" },
+  { href: "/generate", label: "Generate" },
+]
 
 export function Navbar() {
   const pathname = usePathname()
-  const { theme, setTheme } = useTheme()
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
-            <Scale className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-foreground">REDTAPE</span>
+    <header className="sticky top-0 z-50 w-full border-b-2 border-black bg-white">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6 md:px-12">
+
+        {/* Wordmark */}
+        <Link href="/" className="flex items-center gap-3 group" aria-label="REDTAPE Home">
+          {/* Swiss: red square logo mark */}
+          <span
+            className="flex h-8 w-8 items-center justify-center bg-black text-white transition-colors duration-150 group-hover:bg-[#FF3000]"
+            aria-hidden="true"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="0" y="0" width="6" height="6" fill="currentColor"/>
+              <rect x="8" y="0" width="6" height="6" fill="currentColor"/>
+              <rect x="0" y="8" width="6" height="6" fill="currentColor"/>
+              <rect x="8" y="8" width="6" height="6" fill="currentColor"/>
+            </svg>
+          </span>
+          <span className="text-sm font-black tracking-[0.2em] uppercase text-black">
+            REDTAPE
+          </span>
         </Link>
-        
-        <nav className="hidden items-center gap-1 md:flex">
-          <Link
-            href="/"
-            className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-              pathname === "/"
-                ? "bg-secondary text-secondary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            Home
-          </Link>
-          <Link
-            href="/analyze"
-            className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-              pathname === "/analyze"
-                ? "bg-secondary text-secondary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            Analyze
-          </Link>
-          <Link
-            href="/generate"
-            className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-              pathname === "/generate"
-                ? "bg-secondary text-secondary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            Generate
-          </Link>
+
+        {/* Nav links — vertical slide animation on hover */}
+        <nav className="hidden items-center gap-8 md:flex" aria-label="Main navigation">
+          {navLinks.map(({ href, label }) => {
+            const active = pathname === href
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`relative overflow-hidden text-xs font-bold tracking-[0.15em] uppercase transition-colors duration-150 ${
+                  active ? "text-[#FF3000]" : "text-black hover:text-[#FF3000]"
+                }`}
+              >
+                {label}
+                {/* Active underline */}
+                {active && (
+                  <span className="absolute bottom-0 left-0 h-[2px] w-full bg-[#FF3000]" />
+                )}
+              </Link>
+            )
+          })}
         </nav>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="rounded-lg"
-        >
-          <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
+        {/* CTA — primary Swiss button */}
+        <Link href="/analyze" className="swiss-btn-primary h-10 px-6 text-[0.65rem]">
+          Get Started
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </Link>
       </div>
     </header>
   )

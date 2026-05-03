@@ -2,11 +2,8 @@
 "use client"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+
 import { useState, useRef, useEffect } from "react"
-import { Send, Bot, User, Loader2, FileText } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 
 interface Message {
   role: "user" | "bot"
@@ -20,153 +17,136 @@ interface DocumentChatbotProps {
 
 export function DocumentChatbot({ documentContext, documentName = "your document" }: DocumentChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "bot",
-      content: `I have reviewed ${documentName}. What would you like to know about it?`,
-    },
+    { role: "bot", content: `I have reviewed "${documentName}". What would you like to know about it?` },
   ])
-  const [input, setInput] = useState("")
+  const [input, setInput]       = useState("")
   const [isTyping, setIsTyping] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  // Auto-scroll to the latest message
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+  const bottomRef               = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    scrollToBottom()
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isTyping])
 
   const handleSend = async () => {
     if (!input.trim()) return
-
-    const userQuestion = input.trim()
-    
-    // Add user message to UI immediately
-    setMessages((prev) => [...prev, { role: "user", content: userQuestion }])
-    setInput("")
-    setIsTyping(true)
-
+    const q = input.trim()
+    setMessages(prev => [...prev, { role: "user", content: q }])
+    setInput(""); setIsTyping(true)
     try {
-      const res = await fetch(`${API_BASE}/chat/ask`, {
+      const res  = await fetch(`${API_BASE}/chat/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: userQuestion,
-          document_context: documentContext,
-        }),
+        body: JSON.stringify({ question: q, document_context: documentContext }),
       })
-
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`)
-      }
-
-      const responseJson = await res.json()
-
-      if (responseJson.status === "error") {
-        throw new Error(responseJson.error || "Failed to get an answer")
-      }
-
-      // Add bot response to UI
-      setMessages((prev) => [
-        ...prev,
-        { role: "bot", content: responseJson.data.answer },
-      ])
-    } catch (error) {
-      console.error("Chat error:", error)
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "bot",
-          content: "I encountered an error trying to process your request. Please try again.",
-        },
-      ])
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      if (json.status === "error") throw new Error(json.error || "Failed")
+      setMessages(prev => [...prev, { role: "bot", content: json.data.answer }])
+    } catch {
+      setMessages(prev => [...prev, { role: "bot", content: "I encountered an error. Please try again." }])
     } finally {
       setIsTyping(false)
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
   return (
-    <Card className="flex flex-col h-[500px] shadow-sm border-border bg-card">
-      <CardHeader className="py-3 px-4 border-b bg-muted/40">
-        <CardTitle className="text-sm font-medium flex items-center text-foreground">
-          <FileText className="w-4 h-4 mr-2 text-primary" />
-          Chatting with: <span className="ml-1 opacity-80 font-normal truncate">{documentName}</span>
-        </CardTitle>
-      </CardHeader>
+    <div className="border-2 border-black">
+      {/* Header */}
+      <div className="border-b-2 border-black px-5 py-3 swiss-grid-pattern flex items-center gap-3">
+        {/* Bot icon — geometric */}
+        <div className="flex h-7 w-7 items-center justify-center border-2 border-black bg-black flex-shrink-0">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+            <circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/>
+          </svg>
+        </div>
+        <div>
+          <p className="swiss-label text-[#FF3000]">AI Assistant</p>
+          <p className="text-[10px] font-medium text-black/50 truncate max-w-[200px]">{documentName}</p>
+        </div>
+      </div>
 
-      <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/50">
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={`flex items-start gap-3 ${
-              msg.role === "user" ? "flex-row-reverse" : "flex-row"
-            }`}
-          >
+      {/* Messages */}
+      <div className="flex flex-col gap-4 p-5 h-72 overflow-y-auto bg-[#F2F2F2]">
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex items-end gap-2 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+            {/* Avatar */}
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm border ${
-                msg.role === "user" 
-                  ? "bg-primary text-primary-foreground border-primary" 
-                  : "bg-secondary text-secondary-foreground border-border"
+              className={`flex h-6 w-6 flex-shrink-0 items-center justify-center border-2 ${
+                msg.role === "user" ? "border-black bg-black text-white" : "border-black bg-white text-black"
               }`}
             >
-              {msg.role === "user" ? <User size={16} /> : <Bot size={16} />}
+              {msg.role === "user" ? (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/>
+                </svg>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+              )}
             </div>
-            
+
+            {/* Bubble */}
             <div
-              className={`max-w-[80%] rounded-lg p-3 text-sm whitespace-pre-wrap leading-relaxed shadow-sm border ${
+              className={`max-w-[78%] p-3 text-xs font-medium leading-relaxed border-2 ${
                 msg.role === "user"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-muted text-foreground border-border/50"
+                  ? "bg-black text-white border-black"
+                  : "bg-white text-black border-black"
               }`}
             >
               {msg.content}
             </div>
           </div>
         ))}
-        
+
         {isTyping && (
-          <div className="flex items-start gap-3 animate-in fade-in duration-300">
-            <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center shrink-0 shadow-sm">
-              <Bot size={16} className="text-secondary-foreground" />
+          <div className="flex items-end gap-2">
+            <div className="flex h-6 w-6 items-center justify-center border-2 border-black bg-white">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
             </div>
-            <div className="bg-muted rounded-lg p-3 flex items-center space-x-2 border border-border/50 shadow-sm">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">AI is typing...</span>
+            <div className="border-2 border-black bg-white px-4 py-3 flex items-center gap-1.5">
+              {[0, 150, 300].map(delay => (
+                <div
+                  key={delay}
+                  className="h-1.5 w-1.5 bg-black animate-bounce"
+                  style={{ animationDelay: `${delay}ms`, animationDuration: "0.8s" }}
+                />
+              ))}
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
-      </CardContent>
-
-      <div className="p-3 border-t bg-card">
-        <div className="flex items-center gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask a question about this document..."
-            className="flex-1 focus-visible:ring-primary bg-background border-border"
-            disabled={isTyping}
-          />
-          <Button
-            onClick={handleSend}
-            disabled={isTyping || !input.trim()}
-            size="icon"
-            className="shrink-0 shadow-sm"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
-        </div>
+        <div ref={bottomRef} />
       </div>
-    </Card>
+
+      {/* Input */}
+      <div className="border-t-2 border-black flex items-center">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Ask about this document…"
+          disabled={isTyping}
+          className="flex-1 bg-white px-5 py-4 text-xs font-medium text-black placeholder-black/40 focus:outline-none disabled:opacity-50"
+          aria-label="Chat input"
+        />
+        <button
+          onClick={handleSend}
+          disabled={isTyping || !input.trim()}
+          className="flex h-[3.25rem] w-14 flex-shrink-0 items-center justify-center border-l-2 border-black bg-black text-white transition-colors duration-150 hover:bg-[#FF3000] disabled:opacity-40"
+          aria-label="Send message"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
   )
 }
