@@ -1,8 +1,14 @@
 from pdf2image import convert_from_bytes
 import pytesseract
 from pytesseract import Output
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 import re
+
+# On Linux/Docker (Render), Tesseract is installed via apt-get and found on PATH automatically.
+# On Windows (local dev), set TESSERACT_CMD env var to override if needed.
+import os
+_tesseract_cmd = os.getenv("TESSERACT_CMD")
+if _tesseract_cmd:
+    pytesseract.pytesseract.tesseract_cmd = _tesseract_cmd
 
 def clean_ocr_text(text: str) -> str:
     """

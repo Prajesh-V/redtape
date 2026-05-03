@@ -1,13 +1,15 @@
 // FILE: frontend/components/notice-generator.tsx
 "use client"
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
 import { useState, useEffect } from "react"
-import { Sparkles, Download, Loader2, RotateCcw, Copy, Check, Scale } from "lucide-react"
+import { Sparkles, Download, Loader2, RotateCcw, Copy, Check, Scale, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { LawyerRecommendation } from "./lawyer-recommendation"
+import { DocumentChatbot } from "./document-chatbot"
 
 type GenerateState = "input" | "generating" | "viewing"
 
@@ -29,6 +31,7 @@ export function NoticeGenerator() {
   const [state, setState] = useState<GenerateState>("input")
   const [copied, setCopied] = useState(false)
   const [showLawyers, setShowLawyers] = useState(false)
+  const [showChatbot, setShowChatbot] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   // 1. THE AUTOMATION BRIDGE: Listen for redirect flags on mount
@@ -53,6 +56,7 @@ export function NoticeGenerator() {
   const triggerGeneration = async (issueText: string, contextData?: string) => {
     setState("generating")
     setShowLawyers(false)
+    setShowChatbot(false)
 
     try {
       const payload: any = { issue: issueText }
@@ -60,7 +64,7 @@ export function NoticeGenerator() {
         payload.context_data = contextData
       }
 
-      const res = await fetch("http://127.0.0.1:8000/notice/generate", {
+      const res = await fetch(`${API_BASE}/notice/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -102,6 +106,7 @@ export function NoticeGenerator() {
     setNotice(null)
     setState("input")
     setShowLawyers(false)
+    setShowChatbot(false)
   }
 
   const handleCopy = async () => {
@@ -117,7 +122,7 @@ export function NoticeGenerator() {
     setDownloadingPdf(true)
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/notice/download", {
+      const res = await fetch(`${API_BASE}/notice/download`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notice_data: notice }),
@@ -140,6 +145,11 @@ export function NoticeGenerator() {
       setDownloadingPdf(false)
     }
   }
+
+  // Serialize the notice context for the Chatbot
+  const noticeChatContext = notice ? 
+    `Generated Legal Notice:\nSubject: ${notice.subject}\nBody: ${notice.body}\nDemand: ${notice.demand}`
+    : ""
 
   return (
     <div className="space-y-6">
@@ -266,26 +276,47 @@ export function NoticeGenerator() {
           </Card>
 
           {/* ACTION BUTTONS */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3">
             <Button onClick={handleDownload} className="flex-1" disabled={downloadingPdf}>
               {downloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
               {downloadingPdf ? "Generating PDF..." : "Download Final PDF"}
             </Button>
             
-            <Button onClick={() => setShowLawyers(!showLawyers)} variant="outline" className="flex-1 border-border">
+            <Button onClick={() => {
+              setShowChatbot(!showChatbot);
+              setShowLawyers(false);
+            }} variant="secondary" className="flex-1 border-border">
+              <MessageSquare className="mr-2 h-4 w-4" />
+              {showChatbot ? "Hide Chat" : "Ask AI About Notice"}
+            </Button>
+
+            <Button onClick={() => {
+              setShowLawyers(!showLawyers);
+              setShowChatbot(false);
+            }} variant="outline" className="flex-1 border-border">
               <Scale className="mr-2 h-4 w-4" />
               {showLawyers ? "Hide Lawyers" : "Consult a Lawyer"}
             </Button>
 
             <Button variant="outline" onClick={handleCopy} className="flex-1 border-border">
               {copied ? <Check className="mr-2 h-4 w-4 text-green-500" /> : <Copy className="mr-2 h-4 w-4 text-muted-foreground" />}
-              {copied ? "Copied to Clipboard" : "Copy Raw Text"}
+              {copied ? "Copied" : "Copy Text"}
             </Button>
 
             <Button variant="ghost" onClick={handleReset} className="px-4 text-muted-foreground hover:text-foreground">
               <RotateCcw className="h-4 w-4" />
             </Button>
           </div>
+
+          {/* DYNAMIC CHATBOT SECTION */}
+          {showChatbot && (
+            <div className="pt-6 border-t border-border animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <DocumentChatbot 
+                documentContext={noticeChatContext} 
+                documentName="Generated Legal Notice" 
+              />
+            </div>
+          )}
 
           {/* LAWYER RECOMMENDATIONS */}
           {showLawyers && (

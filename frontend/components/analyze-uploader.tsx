@@ -1,12 +1,14 @@
 // FILE: frontend/components/analyze-uploader.tsx
 "use client"
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
 import { useState } from "react"
-import { FileText, AlertTriangle, CheckCircle, Info, Loader2, Download, Scale, ArrowRight } from "lucide-react"
+import { FileText, AlertTriangle, CheckCircle, Info, Loader2, Download, Scale, ArrowRight, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { LawyerRecommendation } from "./lawyer-recommendation"
+import { DocumentChatbot } from "./document-chatbot"
 
 interface AnalysisResult {
   clause: string
@@ -32,6 +34,7 @@ export function AnalyzeUploader() {
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<DocumentSummary | null>(null)
   const [showLawyers, setShowLawyers] = useState(false)
+  const [showChatbot, setShowChatbot] = useState(false)
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
@@ -39,6 +42,7 @@ export function AnalyzeUploader() {
       setFile(e.dataTransfer.files[0])
       setResult(null)
       setShowLawyers(false)
+      setShowChatbot(false)
     }
   }
 
@@ -47,6 +51,7 @@ export function AnalyzeUploader() {
       setFile(e.target.files[0])
       setResult(null)
       setShowLawyers(false)
+      setShowChatbot(false)
     }
   }
 
@@ -69,13 +74,14 @@ export function AnalyzeUploader() {
 
     setAnalyzing(true)
     setShowLawyers(false)
+    setShowChatbot(false)
     const progressInterval = simulateProgress()
 
     const formData = new FormData()
     formData.append("file", file)
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/contract/scan", {
+      const res = await fetch(`${API_BASE}/contract/scan`, {
         method: "POST",
         body: formData,
       })
@@ -109,7 +115,7 @@ export function AnalyzeUploader() {
     formData.append("file", file)
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/contract/highlight", {
+      const res = await fetch(`${API_BASE}/contract/highlight`, {
         method: "POST",
         body: formData,
       })
@@ -156,6 +162,11 @@ export function AnalyzeUploader() {
     if (type.includes("agreement") || type.includes("contract")) return "breach"
     return "general"
   }
+
+  // Serialize the document context for the Chatbot
+  const documentChatContext = result ? 
+    `Document Type: ${result.document_type}\n\nSummary: ${result.summary}\n\nAnalyzed Clauses:\n${result.analysis_results.map(r => `Clause: "${r.clause}"\nRisk: ${r.analysis.risk_type} (${r.analysis.severity})`).join('\n\n')}` 
+    : ""
 
   return (
     <div className="space-y-6">
@@ -228,7 +239,7 @@ export function AnalyzeUploader() {
                     {result.document_type || "Legal Document"}
                   </p>
                 </div>
-                <Button variant="ghost" onClick={() => { setResult(null); setFile(null); setShowLawyers(false); }}>
+                <Button variant="ghost" onClick={() => { setResult(null); setFile(null); setShowLawyers(false); setShowChatbot(false); }}>
                   Scan Another
                 </Button>
               </div>
@@ -271,15 +282,15 @@ export function AnalyzeUploader() {
           </Card>
 
           {/* ACTION BUTTONS */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button onClick={handleTransitionToNotice} className="flex-1">
-              <ArrowRight className="mr-2 h-4 w-4" /> Draft Notice based on Analysis
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+            <Button onClick={handleTransitionToNotice} className="flex-1 min-w-[200px]">
+              <ArrowRight className="mr-2 h-4 w-4" /> Draft Notice
             </Button>
 
             <Button 
               onClick={handleDownloadHighlightedPDF} 
               variant="outline" 
-              className="flex-1 border-border text-foreground"
+              className="flex-1 min-w-[200px] border-border text-foreground"
               disabled={downloadingPdf}
             >
               {downloadingPdf ? (
@@ -287,14 +298,35 @@ export function AnalyzeUploader() {
               ) : (
                 <Download className="mr-2 h-4 w-4" />
               )}
-              {downloadingPdf ? "Generating..." : "Download Highlighted PDF"}
+              {downloadingPdf ? "Generating..." : "Download PDF"}
             </Button>
             
-            <Button onClick={() => setShowLawyers(!showLawyers)} variant="secondary" className="flex-1">
+            <Button onClick={() => {
+              setShowChatbot(!showChatbot);
+              setShowLawyers(false);
+            }} variant="secondary" className="flex-1 min-w-[200px]">
+              <MessageSquare className="mr-2 h-4 w-4" />
+              {showChatbot ? "Hide Chat" : "Ask AI About Document"}
+            </Button>
+
+            <Button onClick={() => {
+              setShowLawyers(!showLawyers);
+              setShowChatbot(false);
+            }} variant="secondary" className="flex-1 min-w-[200px]">
               <Scale className="mr-2 h-4 w-4" />
-              {showLawyers ? "Hide Lawyers" : "Find Specialized Lawyer"}
+              {showLawyers ? "Hide Lawyers" : "Find Lawyer"}
             </Button>
           </div>
+
+          {/* DYNAMIC CHATBOT SECTION */}
+          {showChatbot && (
+            <div className="pt-4 border-t border-border animate-in fade-in duration-500">
+              <DocumentChatbot 
+                documentContext={documentChatContext} 
+                documentName={result.filename || "Uploaded Document"} 
+              />
+            </div>
+          )}
 
           {/* DYNAMIC LAWYER RECOMMENDATIONS */}
           {showLawyers && (

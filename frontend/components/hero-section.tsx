@@ -1,3 +1,4 @@
+// FILE: frontend/components/hero-section.tsx
 "use client"
 
 import Link from "next/link"
@@ -19,7 +20,7 @@ export function HeroSection() {
           <span>AI-Powered Legal Assistance</span>
         </div>
         
-        <h1 className="mb-6 text-balance text-4xl font-bold tracking-tight text-foreground md:text-6xl lg:text-7xl">
+        <h1 className="mb-12 text-balance text-4xl font-bold tracking-tight text-foreground md:text-6xl lg:text-7xl">
           Your Intelligent
           <span className="relative mx-2 inline-block text-primary">
             Legal
@@ -29,11 +30,6 @@ export function HeroSection() {
           </span>
           Assistant
         </h1>
-        
-        <p className="mx-auto mb-12 max-w-2xl text-pretty text-lg text-muted-foreground md:text-xl">
-          Analyze legal notices for risky clauses or generate professional legal documents in seconds. 
-          Powered by advanced AI to save you time and protect your interests.
-        </p>
 
         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
           <Link href="/analyze">

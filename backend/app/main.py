@@ -1,4 +1,5 @@
 # FILE: backend/app/main.py
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.contract_routes import router as contract_router
@@ -16,10 +17,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS for frontend communication
+# Configure CORS — reads FRONTEND_URL from env in production
+_frontend_url = os.getenv("FRONTEND_URL", "*")
+_allowed_origins = [_frontend_url] if _frontend_url != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
