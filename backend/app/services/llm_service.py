@@ -5,20 +5,40 @@ import time
 import threading
 from openai import OpenAI
 
+# Load .env so NVIDIA_API_KEY is available when running locally via `python run.py`
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed — env vars must be set externally (e.g. Render)
+
 # ---------------------------------------------------------------------------
 # NVIDIA NIM Configuration
 # Uses the OpenAI-compatible endpoint — model: mistralai/mistral-medium-3.5-128b
 # Rate limit: 40 requests/minute → min 1.5s between calls
 # ---------------------------------------------------------------------------
 
-NVIDIA_API_KEY  = os.getenv("NVIDIA_API_KEY", "")
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 MODEL_NAME      = "mistralai/mistral-medium-3.5-128b"
 
-_client = OpenAI(
-    api_key=NVIDIA_API_KEY or "dummy",  # OpenAI client requires non-empty key
-    base_url=NVIDIA_BASE_URL,
-)
+# Lazy client — created on first use so it always reads the env var correctly
+_client: OpenAI | None = None
+_client_lock = threading.Lock()
+
+def _get_client() -> OpenAI:
+    """Return the shared OpenAI client, creating it on first call."""
+    global _client
+    if _client is None:
+        with _client_lock:
+            if _client is None:  # double-checked locking
+                api_key = os.getenv("NVIDIA_API_KEY", "")
+                if not api_key:
+                    raise RuntimeError(
+                        "NVIDIA_API_KEY is not set. "
+                        "Add it to backend/.env or set it as an environment variable."
+                    )
+                _client = OpenAI(api_key=api_key, base_url=NVIDIA_BASE_URL)
+    return _client
 
 # ---------------------------------------------------------------------------
 # Thread-safe rate limiter (40 req/min → 1 call per 1.5 s)
@@ -56,7 +76,8 @@ def call_llm(prompt: str, temperature: float = 0.2) -> str:
     """
     _rate_limited_wait()
     try:
-        completion = _client.chat.completions.create(
+        client = _get_client()
+        completion = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
             temperature=temperature,
@@ -65,6 +86,8 @@ def call_llm(prompt: str, temperature: float = 0.2) -> str:
         )
         raw = completion.choices[0].message.content or ""
         return clean_output(raw)
+    except RuntimeError as e:
+        return f"ERROR: {str(e)}"
     except Exception as e:
         return f"ERROR: {str(e)}"
 
