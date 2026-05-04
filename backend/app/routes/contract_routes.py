@@ -8,7 +8,7 @@ from app.services.file_conversion_service import convert_to_pdf
 from app.services.pdf_service import extract_text_from_pdf
 from app.services.ocr_service import extract_text_with_ocr, clean_ocr_text
 from app.services.chunk_service import split_into_clauses
-from app.services.llm_service import analyze_clause, summarize_document, detect_document_type
+from app.services.llm_service import analyze_clause, summarize_document, detect_document_type, analyze_clauses_batch
 from app.services.pdf_highlight_service import highlight_clauses_in_pdf
 from app.services.highlight_engine import HighlightEngine
 
@@ -63,10 +63,12 @@ async def scan_contract(file: UploadFile = File(...)):
         if not filtered_clauses:
             filtered_clauses = [c for c in clauses if len(c.split()) > 8][:10]
 
-        # 4. Contextual Clause Analysis
+        # 4. Batch Contextual Clause Analysis
+        batch_results = analyze_clauses_batch(filtered_clauses[:10], doc_summary=summary_text)
+        
         analysis_results = []
-        for clause in filtered_clauses[:10]:
-            analysis = analyze_clause(clause, doc_summary=summary_text) 
+        for i, clause in enumerate(filtered_clauses[:10]):
+            analysis = batch_results[i] if i < len(batch_results) else {"risk_type": "none", "severity": "low", "explanation": "N/A", "recommendation": "N/A"}
             analysis_results.append({
                 "clause": clause,
                 "analysis": analysis
@@ -145,9 +147,12 @@ async def highlight_contract(file: UploadFile = File(...)):
             if any(word in clause_lower for word in keywords):
                 filtered_clauses.append(clause)
 
+        # Batch Analysis for Highlighting
+        batch_results = analyze_clauses_batch(filtered_clauses, doc_summary=summary_text)
+        
         results = []
-        for clause in filtered_clauses:
-            analysis = analyze_clause(clause, doc_summary=summary_text)
+        for i, clause in enumerate(filtered_clauses):
+            analysis = batch_results[i] if i < len(batch_results) else {"risk_type": "none", "severity": "low"}
             results.append({
                 "clause": clause,
                 "analysis": analysis
