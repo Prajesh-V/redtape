@@ -7,6 +7,9 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: "/analyze", label: "Analyze" },
   { href: "/generate", label: "Generate" },
+  { href: "/courses", label: "Courses" },
+  { href: "/ask", label: "Ask AI" },
+  { href: "/lawyers", label: "Find Lawyer" },
 ]
 
 export function Navbar() {

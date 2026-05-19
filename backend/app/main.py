@@ -18,8 +18,17 @@ app = FastAPI(
 )
 
 # Configure CORS — reads FRONTEND_URL from env in production
-_frontend_url = os.getenv("FRONTEND_URL", "*")
-_allowed_origins = [_frontend_url] if _frontend_url != "*" else ["*"]
+_frontend_url = os.getenv("FRONTEND_URL", "")
+
+# In development, allow common localhost ports; in production, restrict to FRONTEND_URL
+_allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+]
+if _frontend_url and _frontend_url not in _allowed_origins:
+    _allowed_origins.append(_frontend_url)
 
 app.add_middleware(
     CORSMiddleware,

@@ -20,14 +20,14 @@ export default function AnalyzePage() {
               <span className="swiss-section-number">03. Analyze</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-12">
-              <div className="col-span-8 px-6 py-10 md:border-r-2 md:border-black md:px-12">
+              <div className="col-span-8 px-6 py-10 md:border-r-2 md:border-black md:px-12 animate-reveal">
                 <h1 className="font-black text-5xl md:text-6xl tracking-tighter uppercase leading-none">
                   Analyze<br />
                   <span className="text-[#FF3000]">Legal</span><br />
                   Document.
                 </h1>
               </div>
-              <div className="col-span-4 flex items-end px-6 py-10 md:px-10 swiss-diagonal">
+              <div className="col-span-4 flex items-end px-6 py-10 md:px-10 swiss-diagonal animate-reveal [animation-delay:150ms]">
                 <p className="text-sm font-medium leading-relaxed text-black/60 max-w-xs">
                   Upload any PDF or image of a legal document.
                   Our AI extracts clauses, identifies financial and legal risks,

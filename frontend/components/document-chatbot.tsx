@@ -21,6 +21,7 @@ export function DocumentChatbot({ documentContext, documentName = "your document
   ])
   const [input, setInput]       = useState("")
   const [isTyping, setIsTyping] = useState(false)
+  const [internalContext, setInternalContext] = useState(documentContext)
   const bottomRef               = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export function DocumentChatbot({ documentContext, documentName = "your document
       const res  = await fetch(`${API_BASE}/chat/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, document_context: documentContext }),
+        body: JSON.stringify({ question: q, document_context: internalContext }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
@@ -44,6 +45,32 @@ export function DocumentChatbot({ documentContext, documentName = "your document
       setMessages(prev => [...prev, { role: "bot", content: json.data.answer }])
     } catch {
       setMessages(prev => [...prev, { role: "bot", content: "I encountered an error. Please try again." }])
+    } finally {
+      setIsTyping(false)
+    }
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsTyping(true)
+    setMessages(prev => [...prev, { role: "user", content: `(Uploaded file: ${file.name})` }])
+    
+    const fd = new FormData()
+    fd.append("file", file)
+    try {
+      const res = await fetch(`${API_BASE}/contract/scan`, { method: "POST", body: fd })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      if (json.status === "error") throw new Error(json.error || "Analysis failed")
+      
+      const newContextInfo = `\n\n--- NEW FILE (${file.name}) ---\nSummary: ${json.data.summary}\nImportant Points: ${(json.data.important_points || []).join(", ")}`
+      setInternalContext(prev => prev + newContextInfo)
+      
+      setMessages(prev => [...prev, { role: "bot", content: `I have analyzed "${file.name}". You can now ask questions about it.` }])
+    } catch (err) {
+      console.error(err)
+      setMessages(prev => [...prev, { role: "bot", content: `Failed to analyze "${file.name}". Ensure the backend is running.` }])
     } finally {
       setIsTyping(false)
     }
@@ -125,7 +152,13 @@ export function DocumentChatbot({ documentContext, documentName = "your document
       </div>
 
       {/* Input */}
-      <div className="border-t-2 border-black flex items-center">
+      <div className="border-t-2 border-black flex items-center bg-white">
+        <label className="flex h-[3.25rem] w-12 flex-shrink-0 items-center justify-center border-r-2 border-black cursor-pointer hover:bg-[#F2F2F2] transition-colors" title="Upload Document">
+          <input type="file" accept=".pdf,image/*" className="sr-only" onChange={handleFileUpload} disabled={isTyping} />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+          </svg>
+        </label>
         <input
           type="text"
           value={input}
@@ -133,7 +166,7 @@ export function DocumentChatbot({ documentContext, documentName = "your document
           onKeyDown={handleKeyDown}
           placeholder="Ask about this document…"
           disabled={isTyping}
-          className="flex-1 bg-white px-5 py-4 text-xs font-medium text-black placeholder-black/40 focus:outline-none disabled:opacity-50"
+          className="flex-1 bg-white px-4 py-4 text-xs font-medium text-black placeholder-black/40 focus:outline-none disabled:opacity-50"
           aria-label="Chat input"
         />
         <button

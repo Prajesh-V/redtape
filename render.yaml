@@ -10,9 +10,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: NVIDIA_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
       - key: FRONTEND_URL
         sync: false
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-2.5-flash
     healthCheckPath: /
     autoDeploy: true

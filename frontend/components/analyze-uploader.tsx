@@ -190,17 +190,27 @@ export function AnalyzeUploader() {
   // ─── ANALYZING STATE ───────────────────────────────────────────────────────
   if (analyzing) {
     return (
-      <div className="border-2 border-black p-12">
-        <div className="mb-6 flex items-center justify-between">
+      <div className="border-2 border-black p-12 relative overflow-hidden">
+        {/* Scanning beam effect */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#FF3000]/10 to-transparent h-20 w-full -translate-y-full animate-[scan_2s_linear_infinite]" />
+        
+        <div className="mb-6 flex items-center justify-between relative z-10">
           <p className="swiss-section-number">Processing Document</p>
           <span className="swiss-label text-black/40">{progress}%</span>
         </div>
-        <div className="swiss-progress mb-6">
+        <div className="swiss-progress mb-6 relative z-10">
           <div className="swiss-progress-bar" style={{ width: `${progress}%` }} />
         </div>
-        <p className="text-xs font-medium text-black/50 uppercase tracking-widest">
+        <p className="text-xs font-medium text-black/50 uppercase tracking-widest relative z-10">
           Extracting clauses · Identifying risks · Scoring severity
         </p>
+
+        <style jsx>{`
+          @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(400%); }
+          }
+        `}</style>
       </div>
     )
   }

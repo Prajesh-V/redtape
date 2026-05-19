@@ -23,7 +23,7 @@ export function HeroSection() {
           <div className="grid grid-cols-1 md:grid-cols-12">
 
             {/* LEFT — massive headline (8 cols) */}
-            <div className="col-span-8 border-b-2 border-black px-6 py-16 md:border-b-0 md:border-r-2 md:px-12 md:py-24">
+            <div className="col-span-8 border-b-2 border-black px-6 py-16 md:border-b-0 md:border-r-2 md:px-12 md:py-24 animate-reveal">
               <h1 className="font-black leading-none tracking-tighter text-black uppercase">
                 <span className="block text-6xl md:text-8xl lg:text-[7rem] xl:text-[9rem]">Cut</span>
                 <span className="block text-6xl md:text-8xl lg:text-[7rem] xl:text-[9rem] text-[#FF3000]">Through</span>
@@ -33,10 +33,10 @@ export function HeroSection() {
             </div>
 
             {/* RIGHT — body copy + CTAs (4 cols) */}
-            <div className="col-span-4 flex flex-col justify-between px-6 py-16 md:px-10 md:py-24">
+            <div className="col-span-4 flex flex-col justify-between px-6 py-16 md:px-10 md:py-24 animate-reveal [animation-delay:200ms]">
 
               {/* Geometric composition — Bauhaus-style abstract */}
-              <div className="relative mb-10 h-40 w-full swiss-dots overflow-hidden border-2 border-black" aria-hidden="true">
+              <div className="relative mb-10 h-40 w-full swiss-dots overflow-hidden border-2 border-black animate-float" aria-hidden="true">
                 <div className="absolute top-4 left-4 h-20 w-20 border-4 border-black" />
                 <div className="absolute bottom-4 right-4 h-16 w-16 bg-[#FF3000]" />
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-px w-full bg-black" />
@@ -50,17 +50,23 @@ export function HeroSection() {
               </p>
 
               <div className="flex flex-col gap-3">
-                <Link href="/analyze" className="swiss-btn-primary justify-center">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <Link href="/analyze" className="swiss-btn-primary justify-center group">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" className="group-hover:rotate-12 transition-transform">
                     <path d="M1 7a6 6 0 1 0 12 0A6 6 0 0 0 1 7zm4-2h4M7 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                   </svg>
                   Analyze Document
                 </Link>
-                <Link href="/generate" className="swiss-btn-secondary justify-center">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <Link href="/generate" className="swiss-btn-secondary justify-center group">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" className="group-hover:-translate-y-0.5 transition-transform">
                     <path d="M2 2h10v2H2zM2 6h6v2H2zM2 10h8v2H2z" fill="currentColor"/>
                   </svg>
                   Generate Notice
+                </Link>
+                <Link href="/ask" className="swiss-btn-ghost justify-center group border-2 border-black">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="group-hover:scale-110 transition-transform">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  Ask Legal AI
                 </Link>
               </div>
             </div>

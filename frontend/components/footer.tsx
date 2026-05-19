@@ -36,6 +36,9 @@ export function Footer() {
                 { href: "/", label: "Home" },
                 { href: "/analyze", label: "Analyze Document" },
                 { href: "/generate", label: "Generate Notice" },
+                { href: "/courses", label: "Legal Courses" },
+                { href: "/ask", label: "Ask Legal AI" },
+                { href: "/lawyers", label: "Find Lawyer" },
               ].map(({ href, label }) => (
                 <Link
                   key={href}
@@ -46,16 +49,6 @@ export function Footer() {
                 </Link>
               ))}
             </nav>
-          </div>
-
-          {/* Legal */}
-          <div className="col-span-4 px-6 py-10 md:px-10 swiss-dots">
-            <p className="swiss-label mb-4 text-[#FF3000]">Disclaimer</p>
-            <p className="text-xs font-medium leading-relaxed text-black/50">
-              REDTAPE provides AI-assisted legal information for educational
-              purposes only. It does not constitute legal advice. Always consult
-              a qualified legal professional for matters affecting your rights.
-            </p>
           </div>
 
         </div>
