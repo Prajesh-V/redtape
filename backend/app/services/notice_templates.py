@@ -44,16 +44,48 @@ TEMPLATES = {
     }
 }
 
-
 def detect_notice_type(issue: str) -> NoticeType:
-    issue_lower = issue.lower()
+    try:
+        from app.services.llm_service import call_llm
+        
+        prompt = f"""
+You are an expert legal document classification engine.
+Analyze the user's issue and classify it into EXACTLY ONE of these categories:
+- deposit_refund (for security deposit refunds, lease deposits)
+- rent_hike (for unlawful/arbitrary rent increases)
+- eviction (for wrongful eviction, notices to vacate, tenant removal issues)
+- breach (for breach of general agreements, contracts, or non-performance of agreements)
+- unpaid_salary (for unpaid salary, dues, wages, employment contract non-payment)
+- general (for any other general civil, criminal, consumer, property, boundary disputes, trespass, land disputes, etc.)
+
+Rules:
+1. Output ONLY the matching category string from the list above. No other words, no markdown.
+
+USER ISSUE:
+"{issue[:2000]}"
+"""
+        response = call_llm(prompt, temperature=0.0).strip().lower()
+        
+        # Strip any extra quotes, markdown backticks, or trailing periods
+        response = response.replace("`", "").replace("'", "").replace('"', '').strip()
+        
+        for n_type in NoticeType:
+            if n_type.value == response:
+                return n_type
+    except Exception as e:
+        print(f"[Notice Detection] LLM classification failed: {e}. Falling back to keywords.")
     
+    # Fallback to keyword-based detection with word boundaries if LLM fails or doesn't match
+    import re
+    issue_lower = issue.lower()
     for notice_type, template_data in TEMPLATES.items():
         for keyword in template_data["keywords"]:
-            if keyword in issue_lower:
+            pattern = r'\b' + re.escape(keyword) + r'\b'
+            if re.search(pattern, issue_lower):
                 return notice_type
     
     return NoticeType.GENERAL
+
 
 
 class NoticeStructure:
@@ -278,7 +310,12 @@ def build_general_notice(issue: str) -> NoticeStructure:
 4. The Respondent is legally required to address this matter and take corrective action as appropriate.
 """
     notice.set_section("body", body.strip())
+    notice.set_section("demand",
+        "The Respondent is hereby called upon to resolve the matter and take necessary corrective "
+        "action within 15 days from the receipt of this notice.\n\n"
+        "Failing which, appropriate legal proceedings shall be initiated at your risk, cost, and consequences.")
     return notice
+
 
 
 def generate_notice_template(issue: str) -> str:
