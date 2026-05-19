@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -14,13 +15,50 @@ const navLinks = [
 
 export function Navbar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userRole, setUserRole] = useState<"user" | "lawyer" | null>(null)
+  const [userName, setUserName] = useState("")
+
+  useEffect(() => {
+    const role = localStorage.getItem("redtape_role")
+    const name = localStorage.getItem("redtape_username")
+    if (role && name) {
+      setIsLoggedIn(true)
+      setUserRole(role as "user" | "lawyer")
+      setUserName(name)
+    }
+  }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem("redtape_role")
+    localStorage.removeItem("redtape_username")
+    setIsLoggedIn(false)
+    setUserRole(null)
+    setUserName("")
+    router.push("/")
+    // Small timeout to allow Next router to navigate before a hard reload to reset state cleanly
+    setTimeout(() => {
+      window.location.reload()
+    }, 100)
+  }
+
+  // Inject "Manage Cases" link for logged-in lawyers, and update "Home" link
+  const dynamicLinks = navLinks.map(link => 
+    link.label === "Home" ? { ...link, href: isLoggedIn ? "/home" : "/" } : link
+  )
+  
+  if (isLoggedIn && userRole === "lawyer") {
+    // Find index of "Find Lawyer" or put it after "Home"
+    dynamicLinks.splice(1, 0, { href: "/lawyers/dashboard", label: "Manage Cases" })
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b-2 border-black bg-white">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6 md:px-12">
 
         {/* Wordmark */}
-        <Link href="/" className="flex items-center gap-3 group" aria-label="REDTAPE Home">
+        <Link href={isLoggedIn ? "/home" : "/"} className="flex items-center gap-3 group" aria-label="REDTAPE Home">
           {/* Swiss: red square logo mark */}
           <span
             className="flex h-8 w-8 items-center justify-center bg-black text-white transition-colors duration-150 group-hover:bg-[#FF3000]"
@@ -40,7 +78,7 @@ export function Navbar() {
 
         {/* Nav links — vertical slide animation on hover */}
         <nav className="hidden items-center gap-8 md:flex" aria-label="Main navigation">
-          {navLinks.map(({ href, label }) => {
+          {dynamicLinks.map(({ href, label }) => {
             const active = pathname === href
             return (
               <Link
@@ -60,13 +98,37 @@ export function Navbar() {
           })}
         </nav>
 
-        {/* CTA — primary Swiss button */}
-        <Link href="/analyze" className="swiss-btn-primary h-10 px-6 text-[0.65rem]">
-          Get Started
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </Link>
+        {/* CTA / Auth Actions */}
+        <div className="flex items-center gap-4">
+          {!isLoggedIn ? (
+            <>
+              <Link
+                href="/"
+                className="text-xs font-bold tracking-[0.15em] uppercase text-black hover:text-[#FF3000] transition-colors duration-150"
+              >
+                Login
+              </Link>
+              <Link href="/analyze" className="swiss-btn-primary h-10 px-6 text-[0.65rem] flex items-center justify-center">
+                Get Started
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </Link>
+            </>
+          ) : (
+            <>
+              <span className="text-[9px] md:text-[10px] font-bold tracking-wider uppercase text-white bg-black border-2 border-black px-2 py-1 select-none">
+                {userRole === "lawyer" ? "⚖️ LAWYER" : "👤 USER"}: {userName}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="text-xs font-bold tracking-[0.15em] uppercase text-[#FF3000] hover:text-black transition-colors duration-150 cursor-pointer border-b-2 border-transparent hover:border-black py-1"
+              >
+                Logout
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </header>
   )
