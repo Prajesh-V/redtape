@@ -76,9 +76,9 @@ export function HeroSection() {
           {/* Stat bar */}
           <div className="grid grid-cols-3 border-t-2 border-black">
             {[
-              { value: "10s", label: "Analysis time" },
+              { value: "1 minute", label: "Analysis time" },
               { value: "6+", label: "Notice types" },
-              { value: "100%", label: "Free to use" },
+              { value: "100%", label: "Free to start" },
             ].map((stat, i) => (
               <div
                 key={stat.label}

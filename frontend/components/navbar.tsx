@@ -11,6 +11,7 @@ const navLinks = [
   { href: "/courses", label: "Courses" },
   { href: "/ask", label: "Ask AI" },
   { href: "/lawyers", label: "Find Lawyer" },
+  { href: "/pricing", label: "Pricing" },
 ]
 
 export function Navbar() {
